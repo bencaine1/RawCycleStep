@@ -16,58 +16,60 @@ import sys
 import re
 import pyodbc
 
-class CycleStep:
-    def __init__(self, filename, test_req, cell_index, test_date, cycle_type, 
-                 rec_num, cycle_num, step, test_sec, step_sec, amp_hr, watt_hr, amps, volts, state, ES, dpt_time,
-                 WF_chg_cap, WF_dis_cap, WF_chg_E, WF_dis_E, aux1, units):
-        self.filename = filename
-        self.test_req = test_req
-        self.cell_index = cell_index
-        self.test_date = test_date
-        self.cycle_type = cycle_type
-        self.rec_num = rec_num
-        self.cycle_num = cycle_num
-        self.step = step
-        self.test_sec = test_sec
-        self.step_sec = step_sec
-        self.amp_hr = amp_hr
-        self.watt_hr = watt_hr
-        self.amps = amps
-        self.volts = volts
-        self.state = state
-        self.ES = ES
-        self.dpt_time = dpt_time
-        self.WF_chg_cap = WF_chg_cap
-        self.WF_dis_cap = WF_dis_cap
-        self.WF_chg_E = WF_chg_E
-        self.WF_dis_E = WF_dis_E
-        self.aux1 = aux1
-        self.units = units
-    def __str__(self):
-        s = 'filename: ' + str(self.filename) + '\n'
-        s += 'test_req: ' + str(self.test_req) + '\n'
-        s += 'cell_index: ' + str(self.cell_index) + '\n'
-        s += 'test_date: ' + str(self.test_date) + '\n'
-        s += 'cycle_type: ' + str(self.cycle_type) + '\n'
-        s += 'rec_num: ' + str(self.rec_num) + '\n'
-        s += 'cycle_num: ' + str(self.cycle_num) + '\n'
-        s += 'step: ' + str(self.step) + '\n'
-        s += 'test_sec: ' + str(self.test_sec) + '\n'
-        s += 'step_sec: ' + str(self.step_sec) + '\n'
-        s += 'amp_hr: ' + str(self.amp_hr) + '\n'
-        s += 'watt_hr: ' + str(self.watt_hr) + '\n'
-        s += 'amps: ' + str(self.amps) + '\n'
-        s += 'volts: ' + str(self.volts) + '\n'
-        s += 'state: ' + str(self.state) + '\n'
-        s += 'ES: ' + str(self.ES) + '\n'
-        s += 'dpt_time: ' + str(self.dpt_time) + '\n'
-        s += 'WF_chg_cap: ' + str(self.WF_chg_cap) + '\n'
-        s += 'WF_dis_cap: ' + str(self.WF_dis_cap) + '\n'
-        s += 'WF_chg_E: ' + str(self.WF_chg_E) + '\n'
-        s += 'WF_dis_E: ' + str(self.WF_dis_E) + '\n'
-        s += 'aux1: ' + str(self.aux1) + '\n'
-        s += 'units: ' + str(self.units) + '\n'
-        return s
+startTime = datetime.now()
+
+#class CycleStep:
+#    def __init__(self, filename, test_req, cell_index, test_date, cycle_type, 
+#                 rec_num, cycle_num, step, test_sec, step_sec, amp_hr, watt_hr, amps, volts, state, ES, dpt_time,
+#                 WF_chg_cap, WF_dis_cap, WF_chg_E, WF_dis_E, aux1, units):
+#        self.filename = filename
+#        self.test_req = test_req
+#        self.cell_index = cell_index
+#        self.test_date = test_date
+#        self.cycle_type = cycle_type
+#        self.rec_num = rec_num
+#        self.cycle_num = cycle_num
+#        self.step = step
+#        self.test_sec = test_sec
+#        self.step_sec = step_sec
+#        self.amp_hr = amp_hr
+#        self.watt_hr = watt_hr
+#        self.amps = amps
+#        self.volts = volts
+#        self.state = state
+#        self.ES = ES
+#        self.dpt_time = dpt_time
+#        self.WF_chg_cap = WF_chg_cap
+#        self.WF_dis_cap = WF_dis_cap
+#        self.WF_chg_E = WF_chg_E
+#        self.WF_dis_E = WF_dis_E
+#        self.aux1 = aux1
+#        self.units = units
+#    def __str__(self):
+#        s = 'filename: ' + str(self.filename) + '\n'
+#        s += 'test_req: ' + str(self.test_req) + '\n'
+#        s += 'cell_index: ' + str(self.cell_index) + '\n'
+#        s += 'test_date: ' + str(self.test_date) + '\n'
+#        s += 'cycle_type: ' + str(self.cycle_type) + '\n'
+#        s += 'rec_num: ' + str(self.rec_num) + '\n'
+#        s += 'cycle_num: ' + str(self.cycle_num) + '\n'
+#        s += 'step: ' + str(self.step) + '\n'
+#        s += 'test_sec: ' + str(self.test_sec) + '\n'
+#        s += 'step_sec: ' + str(self.step_sec) + '\n'
+#        s += 'amp_hr: ' + str(self.amp_hr) + '\n'
+#        s += 'watt_hr: ' + str(self.watt_hr) + '\n'
+#        s += 'amps: ' + str(self.amps) + '\n'
+#        s += 'volts: ' + str(self.volts) + '\n'
+#        s += 'state: ' + str(self.state) + '\n'
+#        s += 'ES: ' + str(self.ES) + '\n'
+#        s += 'dpt_time: ' + str(self.dpt_time) + '\n'
+#        s += 'WF_chg_cap: ' + str(self.WF_chg_cap) + '\n'
+#        s += 'WF_dis_cap: ' + str(self.WF_dis_cap) + '\n'
+#        s += 'WF_chg_E: ' + str(self.WF_chg_E) + '\n'
+#        s += 'WF_dis_E: ' + str(self.WF_dis_E) + '\n'
+#        s += 'aux1: ' + str(self.aux1) + '\n'
+#        s += 'units: ' + str(self.units) + '\n'
+#        return s
 
 ######### SCRAPE ASCII FILES FOR DATA ##########
 
@@ -83,12 +85,12 @@ cnxn = pyodbc.connect(cnxn_str)
 cnxn.autocommit = True
 cursor = cnxn.cursor()
 
-basePath = r'\\24m-fp01\24m\\MasterData\Battery_Tester_Backup\24MBattTester_Maccor\Data\ASCIIfiles\MACCOR-M'
-#basePath = 'C:\\Users\\bcaine\\Desktop\\Dummy Maccor Data\\data\\ASCIIfiles'
+#basePath = r'\\24m-fp01\24m\\MasterData\Battery_Tester_Backup\24MBattTester_Maccor\Data\ASCIIfiles\MACCOR-M'
+basePath = 'C:\\Users\\bcaine\\Desktop\\Dummy Maccor Data\\data\\ASCIIfiles\\TestFiles\\supertest'
 
 errorFiles = []
 
-cycleSteps = []
+#cycleSteps = []
 
 sys.stdout.write('Working')
 
@@ -143,7 +145,18 @@ for dirpath, dirnames, filenames in os.walk(basePath):
                 fieldnames = reader.fieldnames
                 # test date: B1
                 test_date = fieldnames[1]
-                
+#                print (datetime.now() - startTime)
+#                print 'before RawCycleFile merge'
+                cursor.execute("""
+                merge RawCycleFile as T
+                using (select ?,?,?,?,?)
+                as S (filename, test_req, cell_index, test_date, cycle_type)
+                on S.filename = T.filename
+                when not matched then insert (filename, test_req, cell_index, test_date, cycle_type)
+                values (S.filename, S.test_req, S.cell_index, S.test_date, S.cycle_type);
+                """, f, test_req, cell_index, test_date, cycle_type)
+#                print (datetime.now() - startTime)
+#                print 'after RawCycleFile merge'
 #                # lot code: E1
 #                lot_tmp = fieldnames[4]
 #                index = lot_tmp.find('Barcode: ')
@@ -151,8 +164,7 @@ for dirpath, dirnames, filenames in os.walk(basePath):
                 
                 reader = csv.DictReader(myFile, dialect=dialect,delimiter= '\t')
                 
-                # Record all beginning and end of step rows
-                
+                # Record all beginning and end of step rows                
                 for row in reader:
                     # Beginning or end of step
                     if int(row["ES"]) >= 128 or int(row["ES"]) == 0:
@@ -190,10 +202,32 @@ for dirpath, dirnames, filenames in os.walk(basePath):
                             units = row[' Units']
                         except:
                             units = None
-                        c = CycleStep(f, test_req, cell_index, test_date, cycle_type,
-                                      row['Rec#'], row['Cyc#'], row['Step'], row['Test (Sec)'], row['Step (Sec)'], row['Amp-hr'], row['Watt-hr'], row['Amps'], row['Volts'], row['State'], row['ES'], row['DPt Time'],
-                                      wfchgcap, wfdiscap, wfchge, wfdise, aux1, units)
-                        cycleSteps.append(c)
+#                        print (datetime.now() - startTime)
+#                        print 'before getting file_id'
+                        file_id = -1
+                        q_row = cursor.execute("""
+                        select file_id from RawCycleFile
+                        where filename = ?
+                        """, f).fetchone()
+                        if q_row:
+                            file_id = q_row[0]
+#                        print (datetime.now() - startTime)
+#                        print 'after getting file_id'
+                            
+                        cursor.execute("""
+                        merge RawCycleStep as T
+                        using (select ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        as S (file_id, rec_num, cycle_num, step, test_sec, step_sec, amp_hr, watt_hr, amps, volts, state, ES, dpt_time,
+                                     WF_chg_cap, WF_dis_cap, WF_chg_E, WF_dis_E, aux1, units)
+                        on S.file_id = T.file_id and S.rec_num <= T.rec_num
+                        when not matched then insert (file_id, rec_num, cycle_num, step, test_sec, step_sec, amp_hr, watt_hr, amps, volts, state, ES, dpt_time,
+                                     WF_chg_cap, WF_dis_cap, WF_chg_E, WF_dis_E, aux1, units)
+                        values (S.file_id, S.rec_num, S.cycle_num, S.step, S.test_sec, S.step_sec, S.amp_hr, S.watt_hr, S.amps, S.volts, S.state, S.ES, S.dpt_time,
+                                     S.WF_chg_cap, S.WF_dis_cap, S.WF_chg_E, S.WF_dis_E, S.aux1, S.units);
+                        """, file_id, row['Rec#'], row['Cyc#'], row['Step'], row['Test (Sec)'], row['Step (Sec)'], row['Amp-hr'], row['Watt-hr'], row['Amps'], row['Volts'], row['State'], row['ES'], row['DPt Time'],
+                                  wfchgcap, wfdiscap, wfchge, wfdise, aux1, units)
+#                        print (datetime.now() - startTime)
+#                        print 'after pushing to db'
 
                 # All ok, so add row to FileUpdate table
                 cursor.execute("""
@@ -212,7 +246,6 @@ for dirpath, dirnames, filenames in os.walk(basePath):
 
 #for c in cycleSteps:
 #    print c
-print len(cycleSteps)
 
 print "\nThese files didn't process: ", errorFiles
 
@@ -227,25 +260,25 @@ print "\nThese files didn't process: ", errorFiles
 #    """)
 
 # Populate RawCycleStep table
-print 'Populating RawCycleStep table...'
-filenamelist = []
-for c in cycleSteps:
-    if c.filename not in filenamelist:
-        # Delete all
-        cursor.execute("""
-        delete from RawCycleStep
-        where filename = ?
-        """, c.filename)
-        filenamelist.append(c.filename)
-            
-    cursor.execute("""
-    insert into RawCycleStep (filename, test_req, cell_index, test_date, cycle_type, 
-                 rec_num, cycle_num, step, test_sec, step_sec, amp_hr, watt_hr, amps, volts, state, ES, dpt_time,
-                 WF_chg_cap, WF_dis_cap, WF_chg_E, WF_dis_E, aux1, units)
-    values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
-    """, c.filename, c.test_req, c.cell_index, c.test_date, c.cycle_type, 
-                 c.rec_num, c.cycle_num, c.step, c.test_sec, c.step_sec, c.amp_hr, c.watt_hr, c.amps, c.volts, c.state, c.ES, c.dpt_time,
-                 c.WF_chg_cap, c.WF_dis_cap, c.WF_chg_E, c.WF_dis_E, c.aux1, c.units)
+#print 'Populating RawCycleStep table...'
+#filenamelist = []
+#for c in cycleSteps:
+#    if c.filename not in filenamelist:
+#        # Delete all
+#        cursor.execute("""
+#        delete from RawCycleStep
+#        where filename = ?
+#        """, c.filename)
+#        filenamelist.append(c.filename)
+#            
+#    cursor.execute("""
+#    insert into RawCycleStep (filename, test_req, cell_index, test_date, cycle_type, 
+#                 rec_num, cycle_num, step, test_sec, step_sec, amp_hr, watt_hr, amps, volts, state, ES, dpt_time,
+#                 WF_chg_cap, WF_dis_cap, WF_chg_E, WF_dis_E, aux1, units)
+#    values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);
+#    """, c.filename, c.test_req, c.cell_index, c.test_date, c.cycle_type, 
+#                 c.rec_num, c.cycle_num, c.step, c.test_sec, c.step_sec, c.amp_hr, c.watt_hr, c.amps, c.volts, c.state, c.ES, c.dpt_time,
+#                 c.WF_chg_cap, c.WF_dis_cap, c.WF_chg_E, c.WF_dis_E, c.aux1, c.units)
 
 #close up shop
 cursor.close()
@@ -255,3 +288,5 @@ cnxn.close()
 ## For "last ran" functionality on website
 #with open(r'C:\Users\bcaine\Documents\My Web Sites\EmptySite\globals\form_last_updated.php', 'w') as f:
 #    f.write('Last ran on ' + strftime('%Y-%m-%d %H:%M:%S'))
+
+print (datetime.now() - startTime)
