@@ -376,7 +376,7 @@ for row in assy_proc:
         if q:
             max_cycle_num = q[0]
         # For each raw cycle number in a file:
-        for i in xrange(max_cycle_num):
+        for i in xrange(1, max_cycle_num+1):
             # check the beginning and end dpt_time to see if it's over an hour difference.
             q = cursor.execute("""
             select dpt_time from CycleStep
