@@ -8,16 +8,15 @@ Created on Wed Jun 18 14:31:05 2014
 import os
 import csv
 from datetime import datetime
-from datetime import timedelta
-from time import strftime
-from os import listdir
+#from time import strftime
+#from os import listdir
 from os.path import isfile, join, getmtime
-from collections import OrderedDict
 import sys
 import re
 import pyodbc
 import time
-from tornado import gen
+#from tornado import gen
+import itertools
 
 startTime = datetime.now()
 
@@ -66,7 +65,7 @@ def create_merge_str(table_name, special_merge, *args):
 
 # Add row to CycleStep table.
 # Easy. Given cycle_id, just merge all the values in the current row into the table.
-def process_step_data(f, cursor, row, amp_hr, watt_hr):
+def process_step_data(f, cursor, row, amp_hr, watt_hr, file_id):
     # Put the row into the array cycleSteps
     try:
         wfchgcap = row['WF Chg Cap']
@@ -101,17 +100,14 @@ def process_step_data(f, cursor, row, amp_hr, watt_hr):
     except:
         units = None
 
-    file_id = -1
-    q_row = cursor.execute("""
-    select FileId from CycleFile
-    where Filename = ?
-    """, f).fetchone()
-    if q_row:
-        file_id = q_row[0]
+    s = """
+    insert into CycleStep (file_id, rec_num, cycle_num, step, test_sec, step_sec, amp_hr, watt_hr, amps, volts, state, ES, dpt_time, WF_chg_cap, WF_dis_cap, WF_chg_E, WF_dis_E, aux1, units)
+    values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    """
 
-    s = create_merge_str('CycleStep', 'S.file_id = T.file_id and S.rec_num <= T.rec_num',
-                         'file_id', 'rec_num', 'cycle_num', 'step', 'test_sec', 'step_sec', 'amp_hr', 'watt_hr', 'amps', 'volts', 'state', 'ES', 'dpt_time',
-                         'WF_chg_cap', 'WF_dis_cap', 'WF_chg_E', 'WF_dis_E', 'aux1', 'units')
+#    s = create_merge_str('CycleStep', 'S.file_id = T.file_id and S.rec_num <= T.rec_num',
+#                         'file_id', 'rec_num', 'cycle_num', 'step', 'test_sec', 'step_sec', 'amp_hr', 'watt_hr', 'amps', 'volts', 'state', 'ES', 'dpt_time',
+#                         'WF_chg_cap', 'WF_dis_cap', 'WF_chg_E', 'WF_dis_E', 'aux1', 'units')
     cursor.execute(s, file_id, row['Rec#'], row['Cyc#'], row['Step'], row['Test (Sec)'], row['Step (Sec)'], amp_hr, watt_hr, row['Amps'], row['Volts'], row['State'], row['ES'], row['DPt Time'],
                    wfchgcap, wfdiscap, wfchge, wfdise, aux1, units)
                   
@@ -121,7 +117,9 @@ def process_step_data(f, cursor, row, amp_hr, watt_hr):
 #@gen.engine
 def add_to_db(myFile, f, cursor, dirpath):
     ################ FILE DATA ################
-    dialect = csv.Sniffer().sniff(myFile.read())
+    fdstart = datetime.now()
+    #dialect = csv.Sniffer().sniff(myFile.read())
+
     # Look for test req in file name. Skip if not present.
     test_req, cell_index = None, None
     test_req_match = re.search('_(?P<number>[0-9]{6})_', f)
@@ -131,7 +129,9 @@ def add_to_db(myFile, f, cursor, dirpath):
         # look for 4-digit cell idx in file name
         cell_index_match = re.search('_(?P<number>[0-9]{4})[^0-9]', f)
         if cell_index_match:
-            cell_index = cell_index_match.group('number')                
+            cell_index = cell_index_match.group('number')
+        else:
+            return
     elif old_trq_match:
         test_req = old_trq_match.group('trq')
         # look for A-Z cell idx in file name
@@ -140,19 +140,19 @@ def add_to_db(myFile, f, cursor, dirpath):
         cell_index = ord(cell_index.lower()) - 96
     else:
         return
-
+        
     # look for cycle type in the file name
-    cycle_type = 'other'
-    cycletypes = ['form', 'cyc', 'eol', 'rpt', 'disch', 'rate'] # Took out 'test' because 'batttester' was in a lot of filenames. If 'test' is important, we can look into that.
-    for t in cycletypes:
-        if t in f.lower():
-            cycle_type = t
+    if 'form' in f.lower():
+        cycle_type = 'form'
+    else:
+        cycle_type = 'cyc'
     # If it's "Fukushima" and nothing else, just label it as Fukushima.
-    if cycle_type == 'other' and 'fukushima' in f.lower():
-        cycle_type = 'fukushima'
+#    if cycle_type == 'other' and 'fukushima' in f.lower():
+#        cycle_type = 'fukushima'
 
     # Get first row (fieldnames)
-    reader = csv.DictReader(myFile, dialect=dialect, delimiter='\t')
+    #reader = csv.DictReader(myFile, dialect=dialect, delimiter='\t')
+    reader = csv.DictReader(myFile, delimiter='\t')
     myFile.seek(0)
     fieldnames = reader.fieldnames
 
@@ -173,6 +173,8 @@ def add_to_db(myFile, f, cursor, dirpath):
     m = re.search('(?P<lotname>[A-Za-z]{5}[0-9]{2}[A-Za-z])[0-9]{4}', lot_code)
     if m:
         lotname = m.group('lotname')
+        
+    before_merges = datetime.now()
 
     # Add row to CellLot table.
     s = create_merge_str('CellLot', False,
@@ -185,9 +187,13 @@ def add_to_db(myFile, f, cursor, dirpath):
     if q:
         cell_lot_uid = q[0]
 
-    s = create_merge_str('CellAssembly', 'S.CellIndex = T.CellIndex',
+    s = create_merge_str('CellAssembly', 'S.CellLotUID = T.CellLotUID and S.CellIndex = T.CellIndex',
                          'CellLotUID', 'CellIndex')
     cursor.execute(s, cell_lot_uid, cell_index)
+
+    after_merges = datetime.now() - before_merges
+    print 'merges: ' + str(after_merges)
+    before_misc = datetime.now()
 
     # Add row to CycleFile
     cell_assy_uid = None
@@ -199,17 +205,50 @@ def add_to_db(myFile, f, cursor, dirpath):
     """, test_req, cell_index).fetchone()
     if q_row:
         cell_assy_uid = q_row[0]
-    s = create_merge_str('CycleFile', 'S.Filename = T.Filename',
-                         'CellAssyUID', 'Filename', 'TestDate', 'ProcedureName')
+    s = """insert into CycleFile (CellAssyUID, Filename, TestDate, ProcedureName)
+    values (?,?,?,?)
+    """
+#    s = create_merge_str('CycleFile', 'S.Filename = T.Filename',
+#                         'CellAssyUID', 'Filename', 'TestDate', 'ProcedureName')
     cursor.execute(s, cell_assy_uid, f, test_date, proc_nm)
 
-    ################## STEP DATA ##################
-    reader = csv.DictReader(myFile, dialect=dialect, delimiter= '\t')
+    # get file id for this file
+    file_id = -1
+    q_row = cursor.execute("""
+    select FileId from CycleFile
+    where Filename = ?
+    """, f).fetchone()
+    if q_row:
+        file_id = q_row[0]
+
+#    reader = csv.DictReader(myFile, dialect=dialect, delimiter= '\t')
+    reader = csv.DictReader(myFile, delimiter='\t')
     
+    # Get last rec_num in db for this file
+    last_prev_rec_num = -1
+    q = cursor.execute("""
+    select top 1 rec_num from CycleStep
+    where file_id = ?
+    order by rec_num desc
+    """, file_id).fetchone()
+    if q:
+        last_prev_rec_num = q[0]
+
+    after_misc = datetime.now() - before_misc
+    print 'misc: ' + str(after_misc)
+    
+    print 'all file data: ' + str(datetime.now() - fdstart)
+            
+    ################## STEP DATA ##################
+
+    bf_step = datetime.now()
     # Record all beginning and end of step rows
     step_zero_amp_hr = 0
     step_zero_watt_hr = 0
     for row in reader:
+        # go to the last record we've been to in this file.
+        if int(row['Rec#']) <= last_prev_rec_num:
+            break
         # Beginning or end of step
         if int(row['ES']) >= 128 or int(row['ES']) == 0:
             # Zero out the amp hr and watt hr counters, store values in variables.
@@ -227,9 +266,10 @@ def add_to_db(myFile, f, cursor, dirpath):
                 amp_hr = abs(float(row['Amp-hr']) - step_zero_amp_hr)
                 watt_hr = abs(float(row['Watt-hr']) - step_zero_watt_hr)
             ##################################################
-            process_step_data(f, cursor, row, amp_hr, watt_hr)
+            process_step_data(f, cursor, row, amp_hr, watt_hr, file_id)
             ##################################################
 
+    print 'step data: ' + str(datetime.now() - bf_step)
     # Call stored procedure to populate CellCycle table and cell_cycle_uid columns of CycleStep
     ####################################
     #before = datetime.now()
@@ -270,8 +310,8 @@ cnxn = pyodbc.connect(cnxn_str)
 cnxn.autocommit = True
 cursor = cnxn.cursor()
 
-#basePath = r'\\24m-fp01\24m\\MasterData\Battery_Tester_Backup\24MBattTester_Maccor\Data\ASCIIfiles\MACCOR-M'
-basePath = 'C:\\Users\\bcaine\\Desktop\\Dummy Maccor Data\\data\\ASCIIfiles\\TestFiles\\supertest'
+basePath = r'\\24m-fp01\24m\\MasterData\Battery_Tester_Backup\24MBattTester_Maccor\Data\ASCIIfiles\MACCOR-M'
+#basePath = 'C:\\Users\\bcaine\\Desktop\\Dummy Maccor Data\\data\\ASCIIfiles\\TestFiles'
 
 errorFiles = []
 
@@ -280,6 +320,7 @@ sys.stdout.write('Working')
 # search folders and subfolders and call add_to_db.
 for dirpath, dirnames, filenames in os.walk(basePath):
     for f in filenames:
+        beginfile = datetime.now()
         # check last update, skip if already in FileUpdate db
         date = datetime.fromtimestamp(getmtime(os.path.join(dirpath, f))).strftime("%Y-%m-%d %H:%M:%S")
         row = cursor.execute("""
@@ -299,69 +340,8 @@ for dirpath, dirnames, filenames in os.walk(basePath):
         except csv.Error, e:
             errorFiles.append(f)
             continue
-
-# assy_proc: all assembly procedures.
-# e.g. for a given trq/cellidx, it could contain the files cyc01, cyc02, and cyc03.
-#assy_proc = cursor.execute("""
-#select * from AssemblyProcess
-#""").fetchall()
-#for row in assy_proc:
-#    # files: all files in a given assy_proc. e.g. cyc01, cyc02, cyc03.
-#    files = cursor.execute("""
-#    select FileID, Filename from CycleFile
-#    where AssemblyProcessUID = ?
-#    order by Filename
-#    """, row.AssemblyProcessUID).fetchall()
-#    # real_cycle_num: the actual cycle number of the whole process.
-#    # so if real_cycle_num = 21 at the end of cyc01, it would start from 22 at the beginning of cyc02.
-#    real_cycle_num = 1
-#    for f in files: # DO THIS BY TIME STAMP RATHER THAN FILENAME
-#        # max_cycle_num: the number of cycles in a file.
-#        max_cycle_num = 0
-#        q = cursor.execute("""
-#        select cycle_num from CycleStep
-#        where file_id = ?
-#        order by cycle_num desc
-#        """, f.FileID).fetchone()
-#        if q:
-#            max_cycle_num = q[0]
-#        # For each raw cycle number in a file:
-#        for i in xrange(1, max_cycle_num+1):
-#            # check the beginning and end dpt_time to see if it's over an hour difference.
-#            q = cursor.execute("""
-#            select dpt_time from CycleStep
-#            where file_id = ? and cycle_num = ?
-#            order by dpt_time asc
-#            """, f.FileID, i).fetchone()
-#            if q:
-#                start_time = q.dpt_time
-#            q = cursor.execute("""
-#            select dpt_time from CycleStep
-#            where file_id = ? and cycle_num = ?
-#            order by dpt_time desc
-#            """, f.FileID, i).fetchone()
-#            if q:
-#                end_time = q.dpt_time
-#            if end_time - start_time > timedelta(hours=1):
-#                # Add record to CycleNum.
-#                s = create_merge_str('CellCycle', 'S.AssemblyProcessUID = T.AssemblyProcessUID and S.CycleNum = T.CycleNum',
-#                                        'AssemblyProcessUID','CycleNum')
-#                cursor.execute(s, row.AssemblyProcessUID, real_cycle_num)
-#                # Add cell_cycle_id field to record in Cycle Step.
-#                q = cursor.execute("""
-#                select CellCycleUID from CellCycle
-#                where AssemblyProcessUID = ? and CycleNum = ?
-#                """, row.AssemblyProcessUID, real_cycle_num).fetchone()
-#                if q:
-#                    cell_cycle_id = q.CellCycleUID
-#                cursor.execute("""
-#                merge CycleStep as T
-#                using (select ?,?) as S (file_id, cycle_num)
-#                on S.file_id = T.file_id and S.cycle_num = T.cycle_num
-#                when matched then update set cell_cycle_id = ?;
-#                """, f.FileID, i, cell_cycle_id)
-#                real_cycle_num += 1
-
+        
+        print 'total file time: ' + str(datetime.now() - beginfile)
 
 print "\nThese files didn't process: ", errorFiles
 
