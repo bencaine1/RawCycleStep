@@ -16,6 +16,8 @@ from collections import OrderedDict
 import sys
 import re
 import pyodbc
+import time
+from tornado import gen
 
 startTime = datetime.now()
 
@@ -113,11 +115,13 @@ def process_step_data(f, cursor, row, amp_hr, watt_hr):
     cursor.execute(s, file_id, row['Rec#'], row['Cyc#'], row['Step'], row['Test (Sec)'], row['Step (Sec)'], amp_hr, watt_hr, row['Amps'], row['Volts'], row['State'], row['ES'], row['DPt Time'],
                    wfchgcap, wfdiscap, wfchge, wfdise, aux1, units)
                   
-#######################################
+####################################
 
-# Add row to CycleFile table, and CellLot and CellAssy if applicable.
-# This function is long, but easy.
-def process_file_data(myFile, f, cursor, dialect):
+# Add records to db, given the file myFile, filename f, and cursor cursor.
+#@gen.engine
+def add_to_db(myFile, f, cursor, dirpath):
+    ################ FILE DATA ################
+    dialect = csv.Sniffer().sniff(myFile.read())
     # Look for test req in file name. Skip if not present.
     test_req, cell_index = None, None
     test_req_match = re.search('_(?P<number>[0-9]{6})_', f)
@@ -198,15 +202,8 @@ def process_file_data(myFile, f, cursor, dialect):
     s = create_merge_str('CycleFile', 'S.Filename = T.Filename',
                          'CellAssyUID', 'Filename', 'TestDate', 'ProcedureName')
     cursor.execute(s, cell_assy_uid, f, test_date, proc_nm)
-                  
-####################################
 
-# Add records to db, given the file myFile, filename f, and cursor cursor.
-def add_to_db(myFile, f, cursor):
-    dialect = csv.Sniffer().sniff(myFile.read())
-    #############################################
-    process_file_data(myFile, f, cursor, dialect)
-    #############################################
+    ################## STEP DATA ##################
     reader = csv.DictReader(myFile, dialect=dialect, delimiter= '\t')
     
     # Record all beginning and end of step rows
@@ -234,8 +231,16 @@ def add_to_db(myFile, f, cursor):
             ##################################################
 
     # Call stored procedure to populate CellCycle table and cell_cycle_uid columns of CycleStep
-    ####################################    
-    cursor.execute('exec FillCellCycle(' + f + ')')
+    ####################################
+    #before = datetime.now()
+    cursor.execute("exec FillCellCycle @filename = '" + f + "', @cell_assy_uid = " + str(cell_assy_uid) + ", @cycle_type_name = '" + cycle_type + "'")
+#    while 1:
+#        q = cursor.execute('select status from RunningStatus').fetchone()
+#        print 'q[0] = ' + str(q[0])
+#        if q[0] == 0:
+#            break
+    time.sleep(float(os.path.getsize(os.path.join(dirpath, f)))/10000000) # make sure the process can finish
+    #print 'exec time: ', datetime.now()-before
     ####################################
 
     # All ok, so add row to FileUpdate table
@@ -266,7 +271,7 @@ cnxn.autocommit = True
 cursor = cnxn.cursor()
 
 #basePath = r'\\24m-fp01\24m\\MasterData\Battery_Tester_Backup\24MBattTester_Maccor\Data\ASCIIfiles\MACCOR-M'
-basePath = 'C:\\Users\\bcaine\\Desktop\\Dummy Maccor Data\\data\\ASCIIfiles\\TestFiles'
+basePath = 'C:\\Users\\bcaine\\Desktop\\Dummy Maccor Data\\data\\ASCIIfiles\\TestFiles\\supertest'
 
 errorFiles = []
 
@@ -289,7 +294,7 @@ for dirpath, dirnames, filenames in os.walk(basePath):
         try:
             with open(os.path.join(dirpath, f), 'rb') as myFile:
                 #############################
-                add_to_db(myFile, f, cursor)
+                add_to_db(myFile, f, cursor, dirpath)
                 #############################
         except csv.Error, e:
             errorFiles.append(f)
