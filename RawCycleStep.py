@@ -115,7 +115,7 @@ def process_step_data(f, cursor, row, amp_hr, watt_hr, file_id):
 
 # Add records to db, given the file myFile, filename f, and cursor cursor.
 #@gen.engine
-def add_to_db(myFile, f, cursor, dirpath):
+def add_to_db(myFile, f, cursor, statuscheckcursor, dirpath):
     ################ FILE DATA ################
     fdstart = datetime.now()
     #dialect = csv.Sniffer().sniff(myFile.read())
@@ -174,8 +174,6 @@ def add_to_db(myFile, f, cursor, dirpath):
     if m:
         lotname = m.group('lotname')
         
-    before_merges = datetime.now()
-
     # Add row to CellLot table.
     s = create_merge_str('CellLot', False,
                          'TestRequest', 'CellLotName')
@@ -190,10 +188,6 @@ def add_to_db(myFile, f, cursor, dirpath):
     s = create_merge_str('CellAssembly', 'S.CellLotUID = T.CellLotUID and S.CellIndex = T.CellIndex',
                          'CellLotUID', 'CellIndex')
     cursor.execute(s, cell_lot_uid, cell_index)
-
-    after_merges = datetime.now() - before_merges
-    print 'merges: ' + str(after_merges)
-    before_misc = datetime.now()
 
     # Add row to CycleFile
     cell_assy_uid = None
@@ -233,11 +227,8 @@ def add_to_db(myFile, f, cursor, dirpath):
     """, file_id).fetchone()
     if q:
         last_prev_rec_num = q[0]
-
-    after_misc = datetime.now() - before_misc
-    print 'misc: ' + str(after_misc)
     
-    print 'all file data: ' + str(datetime.now() - fdstart)
+    print 'file-specific: ' + str(datetime.now() - fdstart)
             
     ################## STEP DATA ##################
 
@@ -269,18 +260,22 @@ def add_to_db(myFile, f, cursor, dirpath):
             process_step_data(f, cursor, row, amp_hr, watt_hr, file_id)
             ##################################################
 
-    print 'step data: ' + str(datetime.now() - bf_step)
+    print 'step-specific: ' + str(datetime.now() - bf_step)
+    bf_sp = datetime.now()
     # Call stored procedure to populate CellCycle table and cell_cycle_uid columns of CycleStep
     ####################################
-    #before = datetime.now()
     cursor.execute("exec FillCellCycle @filename = '" + f + "', @cell_assy_uid = " + str(cell_assy_uid) + ", @cycle_type_name = '" + cycle_type + "'")
-#    while 1:
-#        q = cursor.execute('select status from RunningStatus').fetchone()
-#        print 'q[0] = ' + str(q[0])
-#        if q[0] == 0:
-#            break
-    time.sleep(float(os.path.getsize(os.path.join(dirpath, f)))/10000000) # make sure the process can finish
-    #print 'exec time: ', datetime.now()-before
+    while 1:
+        #time.sleep(.1)
+        q = statuscheckcursor.execute('select status from RunningStatus').fetchone()
+        print 'q[0] = ' + str(q[0])
+        if q[0] == 0:
+            break
+            
+    print 'SP: ' + str(datetime.now() - bf_sp)
+#    bf_sleep = datetime.now()
+#    time.sleep(float(os.path.getsize(os.path.join(dirpath, f)))/10000000) # make sure the process can finish
+#    print 'Sleep: ' + str(datetime.now() - bf_sleep)
     ####################################
 
     # All ok, so add row to FileUpdate table
@@ -310,8 +305,12 @@ cnxn = pyodbc.connect(cnxn_str)
 cnxn.autocommit = True
 cursor = cnxn.cursor()
 
-basePath = r'\\24m-fp01\24m\\MasterData\Battery_Tester_Backup\24MBattTester_Maccor\Data\ASCIIfiles\MACCOR-M'
-#basePath = 'C:\\Users\\bcaine\\Desktop\\Dummy Maccor Data\\data\\ASCIIfiles\\TestFiles'
+statuscnxn = pyodbc.connect(cnxn_str)
+statuscnxn.autocommit = True
+statuscheckcursor = statuscnxn.cursor()
+
+#basePath = r'\\24m-fp01\24m\\MasterData\Battery_Tester_Backup\24MBattTester_Maccor\Data\ASCIIfiles\MACCOR-A'
+basePath = 'C:\\Users\\bcaine\\Desktop\\Dummy Maccor Data\\data\\ASCIIfiles\\TestFiles'
 
 errorFiles = []
 
@@ -321,6 +320,7 @@ sys.stdout.write('Working')
 for dirpath, dirnames, filenames in os.walk(basePath):
     for f in filenames:
         beginfile = datetime.now()
+        print 'filename: ' + f
         # check last update, skip if already in FileUpdate db
         date = datetime.fromtimestamp(getmtime(os.path.join(dirpath, f))).strftime("%Y-%m-%d %H:%M:%S")
         row = cursor.execute("""
@@ -335,7 +335,7 @@ for dirpath, dirnames, filenames in os.walk(basePath):
         try:
             with open(os.path.join(dirpath, f), 'rb') as myFile:
                 #############################
-                add_to_db(myFile, f, cursor, dirpath)
+                add_to_db(myFile, f, cursor, statuscheckcursor, dirpath)
                 #############################
         except csv.Error, e:
             errorFiles.append(f)
