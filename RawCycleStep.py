@@ -156,24 +156,27 @@ def add_to_db(myFile, f, cursor, statuscheckcursor, dirpath):
     myFile.seek(0)
     fieldnames = reader.fieldnames
 
-    # Procedure name: D1
-    procTemp = fieldnames[3]
-    index = procTemp.find('Procedure:')
-    index2 = procTemp.find('.000')
-    proc_nm = procTemp[index+11:index2]
-
-    # test date: B1
-    test_date = fieldnames[1]
+    try:
+        # Procedure name: D1
+        procTemp = fieldnames[3]
+        index = procTemp.find('Procedure:')
+        index2 = procTemp.find('.000')
+        proc_nm = procTemp[index+11:index2]
     
-    # lot code: E1
-    lotname = None
-    lot_tmp = fieldnames[4]
-    index = lot_tmp.find('Barcode: ')
-    lot_code = lot_tmp[index+9:]
-    m = re.search('(?P<lotname>[A-Za-z]{5}[0-9]{2}[A-Za-z])[0-9]{4}', lot_code)
-    if m:
-        lotname = m.group('lotname')
+        # test date: B1
+        test_date = fieldnames[1]
         
+        # lot code: E1
+        lotname = None
+        lot_tmp = fieldnames[4]
+        index = lot_tmp.find('Barcode: ')
+        lot_code = lot_tmp[index+9:]
+        m = re.search('(?P<lotname>[A-Za-z]{5}[0-9]{2}[A-Za-z])[0-9]{4}', lot_code)
+        if m:
+            lotname = m.group('lotname')
+    except:
+        print 'empty file'
+        return
     # Add row to CellLot table.
     s = create_merge_str('CellLot', False,
                          'TestRequest', 'CellLotName')
@@ -268,7 +271,7 @@ def add_to_db(myFile, f, cursor, statuscheckcursor, dirpath):
     while 1:
         #time.sleep(.1)
         q = statuscheckcursor.execute('select status from RunningStatus').fetchone()
-        print 'q[0] = ' + str(q[0])
+        #print 'q[0] = ' + str(q[0])
         if q[0] == 0:
             break
             
@@ -295,7 +298,7 @@ def add_to_db(myFile, f, cursor, statuscheckcursor, dirpath):
 
 # connect to db
 cnxn_str = """
-Driver={SQL Server Native Client 11.0};
+Driver={SQL Server};
 Server=172.16.111.235\SQLEXPRESS;
 Database=CellTestData2;
 UID=sa;
@@ -309,16 +312,23 @@ statuscnxn = pyodbc.connect(cnxn_str)
 statuscnxn.autocommit = True
 statuscheckcursor = statuscnxn.cursor()
 
-#basePath = r'\\24m-fp01\24m\\MasterData\Battery_Tester_Backup\24MBattTester_Maccor\Data\ASCIIfiles\MACCOR-A'
-basePath = 'C:\\Users\\bcaine\\Desktop\\Dummy Maccor Data\\data\\ASCIIfiles\\TestFiles'
+basePath = r'\\24m-fp01\24m\\MasterData\Battery_Tester_Backup\24MBattTester_Maccor\Data\ASCIIfiles'
+#basePath = 'C:\\Users\\bcaine\\Desktop\\Dummy Maccor Data\\data\\ASCIIfiles\\TestFiles'
 
 errorFiles = []
 
 sys.stdout.write('Working')
 
 # search folders and subfolders and call add_to_db.
-for dirpath, dirnames, filenames in os.walk(basePath):
-    for f in filenames:
+#for dirpath, dirnames, filenames in os.walk(basePath):
+for d in os.listdir(basePath):
+    dirpath = os.path.join(basePath, d)
+    if not os.path.isdir(dirpath) or d == 'ASCII':
+        continue
+    
+    for f in os.listdir(dirpath):
+        if not os.path.isfile(os.path.join(dirpath, f)):
+            continue
         beginfile = datetime.now()
         print 'filename: ' + f
         # check last update, skip if already in FileUpdate db
