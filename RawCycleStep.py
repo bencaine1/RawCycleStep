@@ -8,6 +8,7 @@ Created on Wed Jun 18 14:31:05 2014
 import os
 import csv
 from datetime import datetime
+from datetime import timedelta
 #from time import strftime
 #from os import listdir
 from os.path import isfile, join, getmtime
@@ -16,7 +17,7 @@ import re
 import pyodbc
 import time
 #from tornado import gen
-import itertools
+import glob
 
 startTime = datetime.now()
 
@@ -263,19 +264,28 @@ def add_to_db(myFile, f, cursor, statuscheckcursor, dirpath):
             process_step_data(f, cursor, row, amp_hr, watt_hr, file_id)
             ##################################################
 
+    cnxn.commit()
+
     print 'step-specific: ' + str(datetime.now() - bf_step)
     bf_sp = datetime.now()
     # Call stored procedure to populate CellCycle table and cell_cycle_uid columns of CycleStep
     ####################################
     cursor.execute("exec FillCellCycle @filename = '" + f + "', @cell_assy_uid = " + str(cell_assy_uid) + ", @cycle_type_name = '" + cycle_type + "'")
     while 1:
-        #time.sleep(.1)
+        time.sleep(.5)
         q = statuscheckcursor.execute('select status from RunningStatus').fetchone()
         #print 'q[0] = ' + str(q[0])
         if q[0] == 0:
             break
-            
+        if datetime.now() - bf_sp >= timedelta(minutes=10):
+            print 'timeout'
+            timeoutFiles.append(f)
+            break
+    
+    cnxn.commit()
+    
     print 'SP: ' + str(datetime.now() - bf_sp)
+    
 #    bf_sleep = datetime.now()
 #    time.sleep(float(os.path.getsize(os.path.join(dirpath, f)))/10000000) # make sure the process can finish
 #    print 'Sleep: ' + str(datetime.now() - bf_sleep)
@@ -289,6 +299,8 @@ def add_to_db(myFile, f, cursor, statuscheckcursor, dirpath):
     when not matched then insert(Filename, LastUpdate)
     values (S.Filename, S.LastUpdate);
     """, f, date)
+    
+    cnxn.commit()    
     
     sys.stdout.write('.')
 
@@ -305,7 +317,7 @@ UID=sa;
 PWD=Welcome!;
 """
 cnxn = pyodbc.connect(cnxn_str)
-cnxn.autocommit = True
+#cnxn.autocommit = True
 cursor = cnxn.cursor()
 
 statuscnxn = pyodbc.connect(cnxn_str)
@@ -316,6 +328,7 @@ basePath = r'\\24m-fp01\24m\\MasterData\Battery_Tester_Backup\24MBattTester_Macc
 #basePath = 'C:\\Users\\bcaine\\Desktop\\Dummy Maccor Data\\data\\ASCIIfiles\\TestFiles'
 
 errorFiles = []
+timeoutFiles = []
 
 sys.stdout.write('Working')
 
@@ -323,10 +336,11 @@ sys.stdout.write('Working')
 #for dirpath, dirnames, filenames in os.walk(basePath):
 for d in os.listdir(basePath):
     dirpath = os.path.join(basePath, d)
-    if not os.path.isdir(dirpath) or d == 'ASCII':
+    if not os.path.isdir(dirpath) or d in ['ASCII', '24MBATTTESTER_05', '24MBATTTESTER_06', '24MBATTTESTER_07']:
         continue
-    
-    for f in os.listdir(dirpath):
+    files = os.listdir(dirpath)
+    files.sort(key=lambda x: os.path.getmtime(os.path.join(dirpath, x)))
+    for f in files:
         if not os.path.isfile(os.path.join(dirpath, f)):
             continue
         beginfile = datetime.now()
@@ -354,6 +368,7 @@ for d in os.listdir(basePath):
         print 'total file time: ' + str(datetime.now() - beginfile)
 
 print "\nThese files didn't process: ", errorFiles
+print "These files timed out: ", timeoutFiles
 
 #close up shop
 cursor.close()
